@@ -115,7 +115,8 @@ class Analysis(Target):
 
     def __init__(self, scripts, pathex=None, binaries=None, datas=None,
                  hiddenimports=None, hookspath=None, excludes=None, runtime_hooks=None,
-                 cipher=None, win_no_prefer_redirects=False, win_private_assemblies=False):
+                 cipher=None, win_no_prefer_redirects=False, win_private_assemblies=False,
+                 assemble_hook=None):
         """
         scripts
                 A list of scripts specified as file names.
@@ -142,6 +143,11 @@ class Analysis(Target):
         win_private_assemblies
                 If True, changes all bundled Windows SxS Assemblies into Private
                 Assemblies to enforce assembly versions.
+        assemble_hook
+                If specified, this should be a function that receives an instance
+                of the Analysis object. This function is called before binary
+                dependencies are expanded, so that you can filter out dependencies
+                you don't actually want to include.
 
         """
         super(Analysis, self).__init__()
@@ -208,6 +214,7 @@ class Analysis(Target):
         self.binding_redirects = CONF['binding_redirects'] = []
         self.win_no_prefer_redirects = win_no_prefer_redirects
         self.win_private_assemblies = win_private_assemblies
+        self.assemble_hook = assemble_hook
         self._python_version = sys.version
 
         self.__postinit__()
@@ -529,6 +536,11 @@ class Analysis(Target):
         # And get references to module code objects constructed by ModuleGraph
         # to avoid writing .pyc/pyo files to hdd.
         self.pure._code_cache = self.graph.get_code_objects()
+
+        # Allow users to filter the assembled binaries before expanding the
+        # binary dependencies
+        if self.assemble_hook:
+            self.assemble_hook(self)
 
         # Add remaining binary dependencies - analyze Python C-extensions and what
         # DLLs they depend on.
