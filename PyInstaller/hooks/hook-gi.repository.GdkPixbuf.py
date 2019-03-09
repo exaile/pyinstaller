@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-# Copyright (c) 2005-2017, PyInstaller Development Team.
+# Copyright (c) 2005-2018, PyInstaller Development Team.
 #
 # Distributed under the terms of the GNU General Public License with exception
 # for distributing bootloader.
@@ -55,17 +55,17 @@ else:
     # To add support for a new platform, add a new "elif" branch below with the
     # proper is_<platform>() test and glob for finding loaders on that platform.
     if is_win:
-        pattern_ext = "*.dll"
+        ext = "*.dll"
     elif is_darwin or is_linux:
-        pattern_ext = "*.so"
+        ext = "*.so"
 
     # If loader detection is supported on this platform, bundle all detected
     # loaders and an updated loader cache.
-    if pattern_ext:
+    if ext:
         loader_libs = []
 
         # Bundle all found loaders with this user application.
-        pattern = os.path.join(libdir, loaders_path, pattern_ext)
+        pattern = os.path.join(libdir, loaders_path, ext)
         for f in glob.glob(pattern):
             binaries.append((f, destpath))
             loader_libs.append(f)
@@ -73,7 +73,7 @@ else:
         # Sometimes the loaders are stored in a different directory from
         # the library (msys2)
         if not loader_libs:
-            pattern = os.path.join(libdir, '..', 'lib', loaders_path, pattern_ext)
+            pattern = os.path.join(libdir, '..', 'lib', loaders_path, ext)
             for f in glob.glob(pattern):
                 binaries.append((f, destpath))
                 loader_libs.append(f)
@@ -116,7 +116,7 @@ else:
                 if line.startswith('#'):
                     continue
                 if line.startswith(prefix):
-                    line = '"@executable_path/lib/gdk-pixbuf-2.0/2.10.0' + line[plen:]
+                    line = '"@executable_path/' + cachedest + line[plen:]
                 cd.append(line)
 
             # Rejoin these lines in a manner preserving this object's "unicode"
