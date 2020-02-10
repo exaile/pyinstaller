@@ -1,17 +1,20 @@
 # ----------------------------------------------------------------------------
-# Copyright (c) 2005-2018, PyInstaller Development Team.
+# Copyright (c) 2005-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 # ----------------------------------------------------------------------------
 import os
 import re
 
 from ..hooks import collect_submodules, collect_system_data_files, eval_statement, exec_statement
 from ... import log as logging
-from ...compat import base_prefix, is_darwin, is_win
+from ...compat import base_prefix, is_darwin, is_win, open_file, \
+    text_read_mode
 from ...depend.bindepend import findSystemLibrary
 
 logger = logging.getLogger(__name__)
@@ -140,9 +143,12 @@ def gir_library_path_fix(path):
                          'package.', gir_file)
             return None
 
-        with open(gir_file, 'r') as f:
+        with open_file(gir_file, text_read_mode, encoding='utf-8') as f:
             lines = f.readlines()
-        with open(os.path.join(CONF['workpath'], gir_name), 'w') as f:
+        # GIR files are `XML encoded <https://developer.gnome.org/gi/stable/gi-gir-reference.html>`_,
+        # which means they are by definition encoded using UTF-8.
+        with open_file(os.path.join(CONF['workpath'], gir_name), 'w',
+                       encoding='utf-8') as f:
             for line in lines:
                 if 'shared-library' in line:
                     split = re.split('(=)', line)

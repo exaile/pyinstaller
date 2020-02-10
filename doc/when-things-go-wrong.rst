@@ -108,7 +108,7 @@ Build-Time Python Errors
 |PyInstaller| sometimes terminates by raising a Python exception.
 In most cases the reason is clear from the exception message,
 for example "Your system is not supported", or "Pyinstaller
-requires at least Python 2.7".
+requires at least Python 3.5".
 Others clearly indicate a bug that should be reported.
 
 One of these errors can be puzzling, however:
@@ -127,7 +127,7 @@ different in different operating systems, but ``/lib`` and ``/usr/lib``
 are checked in most systems.
 If you cannot put the python library there,
 try setting the correct path in the environment variable
-``LD_LIBRARY_PATH`` in Linux or
+``LD_LIBRARY_PATH`` in GNU/Linux or
 ``DYLD_LIBRARY_PATH`` in OS X.
 
 
@@ -135,18 +135,24 @@ Getting Debug Messages
 ----------------------
 
 The ``--debug=all`` option (and its :ref:`choices <pyinstaller how to generate>`) provides a
-signficiant amount of diagnostic inforation.
+signficiant amount of diagnostic information.
 This can be useful during development of a complex package,
 or when your app doesn't seem to be starting,
 or just to learn how the runtime works.
 
 Normally the debug progress messages go to standard output.
 If the ``--windowed`` option is used when bundling a Windows app,
-they are displayed as MessageBoxes.
+they are sent to any attached debugger. If you are not using a debugger
+(or don't have one), the DebugView_ the free (beer) tool can be used to
+display such messages. It has to be started before running the bundled
+application.
+
+.. _DebugView: https://docs.microsoft.com/en-us/sysinternals/downloads/debugview
+
 For a ``--windowed`` Mac OS app they are not displayed.
 
-Remember to bundle without ``--debug`` for your production version.
-Users would find the messages annoying.
+Consider bundling without ``--debug`` for your production version.
+Debugging messages require system calls and have an impact on performance.
 
 
 .. _getting python's verbose imports:
@@ -154,8 +160,8 @@ Users would find the messages annoying.
 Getting Python's Verbose Imports
 --------------------------------
 
-You can bild the app with the ``--debug=imports`` option
-(see `Getting Debug Messages` above),
+You can build the app with the ``--debug=imports`` option
+(see `Getting Debug Messages`_ above),
 which will pass the ``-v`` (verbose imports) flag
 to the embedded Python interpreter.
 This can be extremely useful.
@@ -167,6 +173,51 @@ Python verbose and warning messages always go to standard output
 and are not visible when the ``--windowed`` option is used.
 Remember to not use this for your production version.
 
+
+Figuring Out Why Your GUI Application Won't Start
+---------------------------------------------------
+
+If you are using the ``--windowed`` option,
+your bundled application ay fail to start with an error message like
+``Failed to execute script my_gui``.
+In this case, you will want to get more verbose output to find out
+what is going on.
+
+* For Mac OS, you can run your application on the command line,
+  i.e.``./dist/my_gui``
+  in `Terminal` instead of clicking on ``my_gui.app``.
+
+* For Windows, you will need to re-bundle your application without the
+  ``--windowed`` option.
+  Then you can run the resulting executable from the command line,
+  i.e.: ``my_gui.exe``.
+
+* For Unix and GNU/Linux there in no ``--windowed`` option.
+  Anyway, if a your GUI application fails,
+  you can run your application on the command line,
+  i.e. ``./dist/my_gui``.
+  
+This should give you the relevant error that is preventing your
+application from initializing, and you can then move on to other
+debugging steps.
+
+
+Operation not permitted error
+-----------------------------
+
+If you use the --onefile and it fails to run you program with error like::
+
+    ./hello: error while loading shared libraries: libz.so.1: 
+    failed to map segment from shared object: Operation not permitted
+
+This can be caused by wrong permissions for the /tmp directory
+(e.g. the filesystem is mounted with ``noexec`` flags).
+
+A simple way to solve this issue is to set,
+in the environment variable TMPDIR,
+a path to a directory in a filesystem mounted without ``noexec`` flags, e.g.::
+
+    export TMPDIR=/var/tmp/
 
 .. _helping pyinstaller find modules:
 

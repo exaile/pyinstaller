@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 #-----------------------------------------------------------------------------
-# Copyright (c) 2005-2018, PyInstaller Development Team.
+# Copyright (c) 2005-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 #-----------------------------------------------------------------------------
 
 # Library imports
@@ -29,9 +31,9 @@ signals = sorted([
 def test_signal_handled(pyi_builder, signame, ignore):
     # xfail tests for signals that the bootloader does NOT forward
     if signame in ['SIGKILL', 'SIGSTOP']:
-        pytest.xfail('{} cannot be caught'.format(signame))
+        pytest.skip('{} cannot be caught'.format(signame))
     elif signame in ['SIGCHLD', 'SIGCLD']:
-        pytest.xfail(
+        pytest.skip(
             'Messing with {} interferes with bootloader'.format(signame)
         )
 
@@ -41,7 +43,6 @@ def test_signal_handled(pyi_builder, signame, ignore):
 
     pyi_builder.test_source(
         """
-        from __future__ import print_function
         import psutil
         import signal
         import sys

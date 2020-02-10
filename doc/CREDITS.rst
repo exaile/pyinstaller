@@ -5,6 +5,39 @@ Thanks goes to all the kind PyInstaller contributors who have contributed
 new code, bug reports, fixes, comments and ideas. A brief list follows,
 please let us know if your name is omitted by accident:
 
+Contributions to PyInstaller 3.6
+----------------------------------
+
+* Hartmut Goebel - Core developer, maintainer and release manager.
+* Bryan A. Jones - Core developer and PyQt5-tamer.
+
+* Dan Yeaw, Amir Rossert, Hugo Martins, Felix Schwarz, Giuseppe Corbelli,
+  HoLuLuLu, Jonathan Springer, Matt Khan, Min'an, Oracizan, Victor Stinner,
+  Andres, Andrew Chow, Bernát Gábor, Charles Duffy, Chris, Chrisg2000,
+  FranzPio, Lee Jeonghun, Lukasz Stolcman, Lyux, László Kiss Kollár, Mathias
+  Lohne, Michael Felt, Noodle-Head, Ogi Moore, Patryk, RedFantom, Rémy Roy,
+  Sean McGuire, Thomas Robitaille, Tim, Toby, Tuomo, V.Shkaberda, Vojtěch
+  Drábek, Wilmar den Ouden, david, ethframe, lnv42, ripdog, satvidh,
+  thisisivanfong
+
+
+Contributions to PyInstaller 3.5
+----------------------------------
+
+* Hartmut Goebel - Core developer, maintainer and release manager.
+* Bryan A. Jones - Core developer and PyQt5-tamer.
+
+* Dave Cortesi, Kuisong Tong, melvyn2, Giuseppe Corbelli, Florian Bruhin, Amir
+  Ramezani, Cesar Vandevelde, Paul Müller, Thomas Robitaille, zachbateman,
+  Addison Elliott, Amir Rossert, AndCycle, Atomfighter10101, Chris Berthiaume,
+  Craig Younkins (bot), Don Krueger, Edward Chen, Exane Server Team, Hannes,
+  Iwan, Jakob Schnitzer, Janzert, Jendrik Seipp, Jonathan Springer, Kirill
+  German, Laszlo Kiss-Kollar, Loran425, Lori J, M*C*O, Nikita Melentev, Peter
+  Bittner, RedFantom, Roman, Roman Yurchak, Ruslan Kuprieiev, Spencer Brown,
+  Suzumizaki, Tobias Gruetzmacher, Tobias V. Langhoff, TobiasRzepka, Tom
+  Hacohen, Yuval Shkolar, cclauss, charlesoblack, djl197, matias morant,
+  satejkhedekar, zhu
+
 
 Contributions to PyInstaller 3.4
 ----------------------------------

@@ -1,10 +1,12 @@
 #-----------------------------------------------------------------------------
-# Copyright (c) 2013-2018, PyInstaller Development Team.
+# Copyright (c) 2013-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 #-----------------------------------------------------------------------------
 
 """
@@ -21,8 +23,10 @@ import zipfile
 import collections
 
 from .. import compat
-from ..compat import (is_win, is_unix, is_aix, is_solar, is_cygwin, is_hpux,
-                      is_darwin, is_freebsd, is_venv, base_prefix, PYDYLIB_NAMES)
+from ..compat import (is_win, is_win_10, is_unix,
+                      is_aix, is_solar, is_cygwin, is_hpux,
+                      is_darwin, is_freebsd, is_openbsd, is_venv, is_conda,
+                      base_prefix, PYDYLIB_NAMES)
 from . import dylib, utils
 
 from .. import log as logging
@@ -79,11 +83,6 @@ def getfullnameof(mod, xtrapath=None):
         npth = os.path.join(p, mod)
         if os.path.exists(npth) and matchDLLArch(npth):
             return npth
-        # second try: lower case filename
-        for p in epath:
-            npth = os.path.join(p, mod.lower())
-            if os.path.exists(npth) and matchDLLArch(npth):
-                return npth
     return ''
 
 
@@ -184,16 +183,22 @@ def matchDLLArch(filename):
         return True
 
     global _exe_machine_type
-    if _exe_machine_type is None:
-        exe_pe = pefile.PE(sys.executable, fast_load=True)
-        _exe_machine_type = exe_pe.FILE_HEADER.Machine
-        exe_pe.close()
+    try:
+        if _exe_machine_type is None:
+            pefilename = sys.executable  # for exception handling
+            exe_pe = pefile.PE(sys.executable, fast_load=True)
+            _exe_machine_type = exe_pe.FILE_HEADER.Machine
+            exe_pe.close()
 
-    pe = pefile.PE(filename, fast_load=True)
-
-    match_arch = pe.FILE_HEADER.Machine == _exe_machine_type
-    pe.close()
+        pefilename = filename  # for exception handling
+        pe = pefile.PE(filename, fast_load=True)
+        match_arch = pe.FILE_HEADER.Machine == _exe_machine_type
+        pe.close()
+    except pefile.PEFormatError as exc:
+        raise SystemExit('Can not get architecture from file: %s\n'
+                         '  Reason: %s' % (pefilename, exception))
     return match_arch
+
 
 def Dependencies(lTOC, xtrapath=None, manifest=None, redirects=None):
     """
@@ -336,6 +341,9 @@ def getAssemblies(pth):
     Redistributable runtime libraries 9.0.
 
     Python 3.3+ is compiled with version 10.0 and does not use SxS assemblies.
+
+    FIXME: Can this be removed since we now only support Python 3.5+?
+    FIXME: IS there some test-case covering this?
     """
     if pth.lower().endswith(".manifest"):
         return []
@@ -529,7 +537,10 @@ def selectImports(pth, xtrapath=None):
                              lib, os.path.basename(pth), npth)
                 rv.append((lib, npth))
         else:
-            logger.warning("lib not found: %s dependency of %s", lib, pth)
+            # Don't spew out false warnings on win 10 and UCRT (see issue
+            # #1566).
+            if not (is_win_10 and lib.startswith("api-ms-win-crt")):
+                logger.warning("lib not found: %s dependency of %s", lib, pth)
 
     return rv
 
@@ -724,8 +735,11 @@ def getImports(pth):
             # dependencies should already have been handled by
             # selectAssemblies in that case, so just warn, return an empty
             # list and continue.
-            logger.warning('Can not get binary dependencies for file: %s', pth,
-                           exc_info=1)
+            # For less specific errors also log the traceback.
+            logger.warning('Can not get binary dependencies for file: %s', pth)
+            logger.warning(
+                '  Reason: %s', exception,
+                exc_info=not isinstance(exception, pefile.PEFormatError))
             return []
     elif is_darwin:
         return _getImports_macholib(pth)
@@ -771,8 +785,7 @@ def findLibrary(name):
         # Architecture independent locations.
         paths = ['/lib', '/usr/lib']
         # Architecture dependent locations.
-        arch = compat.architecture()
-        if arch == '32bit':
+        if compat.architecture == '32bit':
             paths.extend(['/lib32', '/usr/lib32', '/usr/lib/i386-linux-gnu'])
         else:
             paths.extend(['/lib64', '/usr/lib64', '/usr/lib/x86_64-linux-gnu'])
@@ -798,11 +811,11 @@ def findLibrary(name):
         if is_aix:
             paths.append('/opt/freeware/lib')
         elif is_hpux:
-            if arch == '32bit':
+            if compat.architecture == '32bit':
                 paths.append('/usr/local/lib/hpux32')
             else:
                 paths.append('/usr/local/lib/hpux64')
-        elif is_freebsd:
+        elif is_freebsd or is_openbsd:
             paths.append('/usr/local/lib')
         for path in paths:
             libs = glob(os.path.join(path, name + '*'))
@@ -815,7 +828,7 @@ def findLibrary(name):
         return None
 
     # Resolve the file name into the soname
-    if is_freebsd or is_aix:
+    if is_freebsd or is_aix or is_openbsd:
         # On FreeBSD objdump doesn't show SONAME,
         # and on AIX objdump does not exist,
         # so we just return the lib we've found
@@ -833,7 +846,11 @@ def _get_so_name(filename):
     """
     # TODO verify that objdump works on other unixes and not Linux only.
     cmd = ["objdump", "-p", filename]
-    m = re.search(r'\s+SONAME\s+([^\s]+)', compat.exec_command(*cmd))
+    pattern = r'\s+SONAME\s+([^\s]+)'
+    if is_solar:
+        cmd = ["elfdump", "-d", filename]
+        pattern = r'\s+SONAME\s+[^\s]+\s+([^\s]+)'
+    m = re.search(pattern, compat.exec_command(*cmd))
     return m.group(1)
 
 
@@ -858,6 +875,14 @@ def get_python_library_path():
     Darwin custom builds could possibly also have non-framework style libraries,
     so this method also checks for that variant as well.
     """
+    def _find_lib_in_libdirs(*libdirs):
+        for libdir in libdirs:
+            for name in PYDYLIB_NAMES:
+                full_path = os.path.join(libdir, name)
+                if os.path.exists(full_path):
+                    return full_path
+        return None
+
     # Try to get Python library name from the Python executable. It assumes that Python
     # library is not statically linked.
     dlls = getImports(sys.executable)
@@ -872,9 +897,23 @@ def get_python_library_path():
                 return filename
 
     # Python library NOT found. Resume searching using alternative methods.
-    # Applies only to non Windows platforms.
 
-    if is_unix:
+    # Work around for python venv having VERSION.dll rather than pythonXY.dll
+    if is_win and 'VERSION.dll' in dlls:
+        pydll = 'python%d%d.dll' % sys.version_info[:2]
+        return getfullnameof(pydll)
+
+    # Applies only to non Windows platforms and conda.
+
+    if is_conda:
+        # Conda needs to be the first here since it overrules the operating
+        # system specific paths.
+        python_libname = _find_lib_in_libdirs(
+            os.path.join(compat.base_prefix, 'lib'))
+        if python_libname:
+            return python_libname
+
+    elif is_unix:
         for name in PYDYLIB_NAMES:
             python_libname = findLibrary(name)
             if python_libname:
@@ -892,17 +931,22 @@ def get_python_library_path():
         # and exec_prefix. That's why we can use just sys.prefix.
         # In virtualenv PyInstaller is not able to find Python library.
         # We need special care for this case.
-        # Anaconda places the python library in the lib directory, so
-        # we search this one as well.
-        prefixes = [compat.base_prefix, os.path.join(compat.base_prefix, 'lib')]
-        for prefix in prefixes:
-            for name in PYDYLIB_NAMES:
-                full_path = os.path.join(prefix, name)
-                if os.path.exists(full_path):
-                    return full_path
+        python_libname = _find_lib_in_libdirs(compat.base_prefix)
+        if python_libname:
+            return python_libname
 
-    # Python library NOT found. Return just None.
-    return None
+    # Python library NOT found. Provide helpful feedback.
+    msg = """Python library not found: %s
+    This would mean your Python installation doesn't come with proper library files.
+    This usually happens by missing development package, or unsuitable build parameters of Python installation.
+
+    * On Debian/Ubuntu, you would need to install Python development packages
+      * apt-get install python3-dev
+      * apt-get install python-dev
+    * If you're building Python by yourself, please rebuild your Python with `--enable-shared` (or, `--enable-framework` on Darwin)
+    """ % (", ".join(PYDYLIB_NAMES),)
+    raise IOError(msg)
+
 
 def findSystemLibrary(name):
     '''

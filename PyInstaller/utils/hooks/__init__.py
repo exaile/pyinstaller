@@ -1,10 +1,12 @@
 #-----------------------------------------------------------------------------
-# Copyright (c) 2005-2018, PyInstaller Development Team.
+# Copyright (c) 2005-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 #-----------------------------------------------------------------------------
 import copy
 import glob
@@ -15,10 +17,11 @@ import sys
 import textwrap
 
 from ...compat import base_prefix, exec_command_stdout, exec_python, \
-    is_darwin, is_py2, is_py3, is_venv, string_types, open_file, \
+    is_darwin, is_venv, string_types, open_file, \
     EXTENSION_SUFFIXES, ALL_SUFFIXES
 from ... import HOMEPATH
 from ... import log as logging
+from ...exceptions import ExecCommandFailed
 
 logger = logging.getLogger(__name__)
 
@@ -55,23 +58,13 @@ def __exec_python_cmd(cmd, env=None):
     # PyInstaller HOMEPATH to sys.path too.
     pp = os.pathsep.join(CONF['pathex'] + [HOMEPATH])
 
-    # On Python 2, `os.environ` may only contain bytes.
-    # Encode unicode filenames using FS encoding.
-    # TODO: `os.environ` wrapper that encodes automatically?
-    if is_py2:
-        if isinstance(pp, unicode):
-            pp = pp.encode(sys.getfilesystemencoding())
-
     # PYTHONPATH might be already defined in the 'env' argument or in
     # the original 'os.environ'. Prepend it.
     if 'PYTHONPATH' in pp_env:
         pp = os.pathsep.join([pp_env.get('PYTHONPATH'), pp])
     pp_env['PYTHONPATH'] = pp
 
-    try:
-        txt = exec_python(*cmd, env=pp_env)
-    except OSError as e:
-        raise SystemExit("Execution failed: %s" % e)
+    txt = exec_python(*cmd, env=pp_env)
     return txt.strip()
 
 
@@ -182,9 +175,7 @@ def get_homebrew_path(formula=''):
     except subprocess.CalledProcessError:
         logger.debug('homebrew formula "%s" not installed' % formula)
     if path:
-        if is_py3:
-            path = path.decode('utf8')  # OS X filenames are UTF-8
-        return path
+        return path.decode('utf8')  # OS X filenames are UTF-8
     else:
         return None
 
@@ -914,7 +905,7 @@ def get_installer(module):
                 logger.debug(
                     'Found installer: \'macports\' for module: \'{0}\' from package: \'{1}\''.format(module, package))
                 return 'macports'
-        except OSError:
+        except ExecCommandFailed:
             pass
         real_path = os.path.realpath(file_name)
         if 'Cellar' in real_path:

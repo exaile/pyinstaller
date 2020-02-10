@@ -1,17 +1,16 @@
 #-----------------------------------------------------------------------------
-# Copyright (c) 2005-2018, PyInstaller Development Team.
+# Copyright (c) 2005-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 #-----------------------------------------------------------------------------
 
 # Imports
 # =======
-# Futures
-# -------
-from __future__ import print_function
 
 # Library imports
 # ---------------
@@ -26,6 +25,7 @@ import inspect
 import textwrap
 import io
 import shutil
+from contextlib import suppress
 
 # Third-party imports
 # -------------------
@@ -49,18 +49,14 @@ sys.path.append(_ROOT_DIR)
 
 from PyInstaller import configure, config
 from PyInstaller import __main__ as pyi_main
+from PyInstaller.utils.tests import gen_sourcefile
 from PyInstaller.utils.cliutils import archive_viewer
-from PyInstaller.compat import is_darwin, is_win, is_py2, safe_repr, \
-    architecture, is_linux, suppress, text_read_mode
+from PyInstaller.compat import is_darwin, is_win, safe_repr, \
+    architecture, is_linux, text_read_mode
 from PyInstaller.depend.analysis import initialize_modgraph
 from PyInstaller.utils.win32 import winutils
-from PyInstaller.utils.hooks.qt import pyqt5_library_info
+from PyInstaller.utils.hooks.qt import pyqt5_library_info, pyside2_library_info
 
-# Monkeypatch the psutil subprocess on Python 2
-if is_py2:
-    import subprocess32
-    psutil.subprocess = subprocess32
-    subprocess.TimeoutExpired = psutil.TimeoutExpired
 
 # Globals
 # =======
@@ -84,6 +80,17 @@ _MAX_RETRIES = 2
 # ====
 # Fixtures
 # --------
+
+@pytest.fixture
+def SPEC_DIR():
+    """Return the directory where the test spec-files reside"""
+    return py.path.local(_SPEC_DIR)
+
+
+@pytest.fixture
+def SCRIPT_DIR():
+    """Return the directory where the test scripts reside"""
+    return py.path.local(_SCRIPT_DIR)
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -138,13 +145,12 @@ def data_dir(
 
 class AppBuilder(object):
 
-    def __init__(self, tmpdir, bundle_mode, module_graph):
+    def __init__(self, tmpdir, bundle_mode):
         self._tmpdir = tmpdir
         self._mode = bundle_mode
-        self._specdir = self._tmpdir
-        self._distdir = os.path.join(self._tmpdir, 'dist')
-        self._builddir = os.path.join(self._tmpdir, 'build')
-        self._modgraph = module_graph
+        self._specdir = str(tmpdir)
+        self._distdir = str(tmpdir / 'dist')
+        self._builddir = str(tmpdir /'build')
 
 
     def test_spec(self, specfile, *args, **kwargs):
@@ -182,25 +188,11 @@ class AppBuilder(object):
 
         """
         __tracebackhide__ = True
-        if is_py2:
-            if isinstance(source, str):
-                source = source.decode('UTF-8')
-        testname = inspect.stack()[1][3]
-        if 'test_id' in kwargs:
-            # For parametrized test append the test-id.
-            testname = testname + '__' + kwargs['test_id']
-            del kwargs['test_id']
-
-        # Periods are not allowed in Python module names.
-        testname = testname.replace('.', '_')
-
-        scriptfile = os.path.join(os.path.abspath(self._tmpdir),
-                                  testname + '.py')
-        source = textwrap.dedent(source)
-        with io.open(scriptfile, 'w', encoding='utf-8') as ofh:
-            print(u'# -*- coding: utf-8 -*-', file=ofh)
-            print(source, file=ofh)
-        return self.test_script(scriptfile, *args, **kwargs)
+        # For parametrized test append the test-id.
+        scriptfile = gen_sourcefile(self._tmpdir, source,
+                                    kwargs.setdefault('test_id'))
+        del kwargs['test_id']
+        return self.test_script(str(scriptfile), *args, **kwargs)
 
 
     def test_script(self, script, pyi_args=None, app_name=None,
@@ -331,7 +323,7 @@ class AppBuilder(object):
             # Run executable in the temp directory
             # Add the directory containing the executable to $PATH
             # Basically, pretend we are a shell executing the program from $PATH.
-            prog_cwd = self._tmpdir
+            prog_cwd = str(self._tmpdir)
             prog_name = os.path.basename(prog)
             prog_env['PATH'] = os.pathsep.join([prog_env.get('PATH', ''), os.path.dirname(prog)])
 
@@ -340,22 +332,6 @@ class AppBuilder(object):
             prog_cwd = os.path.dirname(prog)
             # The executable will be called with argv[0] as relative not absolute path.
             prog_name = os.path.join(os.curdir, os.path.basename(prog))
-
-        # Workaround to enable win_codepage_test
-        # If _distdir is 'bytes', PyI build fails with ASCII decode error
-        # when it joins the 'bytes' _distdir with the 'unicode' filenames from bindep and
-        # winmanifest.
-        #
-        # PyI succeeds with _distdir as 'unicode', but subprocess
-        # fails with ASCII encode error. subprocess succeeds if progname is
-        # mbcs-encoded 'bytes'
-        if is_win and is_py2:
-            if isinstance(exe_path, unicode):
-                exe_path = exe_path.encode('mbcs')
-            if isinstance(prog_name, unicode):
-                prog_name = prog_name.encode('mbcs')
-            if isinstance(prog_cwd, unicode):
-                prog_cwd = prog_cwd.encode('mbcs')
 
         args = [prog_name] + args
         # Using sys.stdout/sys.stderr for subprocess fixes printing messages in
@@ -403,12 +379,8 @@ class AppBuilder(object):
                     p.kill()
             stdout, stderr = process.communicate()
 
-        if is_py2:
-            sys.stdout.write(stdout)
-            sys.stderr.write(stderr)
-        else:
-            sys.stdout.buffer.write(stdout)
-            sys.stderr.buffer.write(stderr)
+        sys.stdout.buffer.write(stdout)
+        sys.stderr.buffer.write(stderr)
 
         return retcode
 
@@ -439,9 +411,7 @@ class AppBuilder(object):
         # TODO fix return code in running PyInstaller programatically
         PYI_CONFIG = configure.get_config(upx_dir=None)
         # Override CACHEDIR for PyInstaller and put it into self.tmpdir
-        PYI_CONFIG['cachedir'] = self._tmpdir
-        # Speed up tests by reusing copy of basic module graph object.
-        PYI_CONFIG['tests_modgraph'] = copy.deepcopy(self._modgraph)
+        PYI_CONFIG['cachedir'] = str(self._tmpdir)
 
         pyi_main.run(pyi_args, PYI_CONFIG)
         retcode = 0
@@ -492,35 +462,35 @@ def pyi_modgraph():
     # lead to TRACE messages been written out.
     import PyInstaller.log as logging
     logging.logger.setLevel(logging.DEBUG)
-    return initialize_modgraph()
+    initialize_modgraph()
 
 
 # Run by default test as onedir and onefile.
 @pytest.fixture(params=['onedir', 'onefile'])
 def pyi_builder(tmpdir, monkeypatch, request, pyi_modgraph):
-    tmp = tmpdir.strpath
     # Save/restore environment variable PATH.
     monkeypatch.setenv('PATH', os.environ['PATH'], )
     # PyInstaller or a test case might manipulate 'sys.path'.
     # Reset it for every test.
     monkeypatch.syspath_prepend(None)
     # Set current working directory to
-    monkeypatch.chdir(tmp)
+    monkeypatch.chdir(tmpdir)
     # Clean up configuration and force PyInstaller to do a clean configuration
     # for another app/test.
     # The value is same as the original value.
     monkeypatch.setattr('PyInstaller.config.CONF', {'pathex': []})
 
-    yield AppBuilder(tmp, request.param, pyi_modgraph)
+    yield AppBuilder(tmpdir, request.param)
 
     if is_darwin or is_linux:
         if request.node.rep_setup.passed:
             if request.node.rep_call.passed:
-                if os.path.exists(tmp):
-                    shutil.rmtree(tmp)
+                if tmpdir.exists():
+                    tmpdir.remove(rec=1, ignore_errors=True)
     # Clear any PyQt5 state.
     try:
         del pyqt5_library_info.version
+        del pyside2_library_info.version
     except AttributeError:
         pass
 
@@ -529,11 +499,10 @@ def pyi_builder(tmpdir, monkeypatch, request, pyi_modgraph):
 # With .spec it does not make sense to differentiate onefile/onedir mode.
 @pytest.fixture
 def pyi_builder_spec(tmpdir, monkeypatch, pyi_modgraph):
-    tmp = tmpdir.strpath
     # Save/restore environment variable PATH.
     monkeypatch.setenv('PATH', os.environ['PATH'], )
     # Set current working directory to
-    monkeypatch.chdir(tmp)
+    monkeypatch.chdir(tmpdir)
     # PyInstaller or a test case might manipulate 'sys.path'.
     # Reset it for every test.
     monkeypatch.syspath_prepend(None)
@@ -542,7 +511,7 @@ def pyi_builder_spec(tmpdir, monkeypatch, pyi_modgraph):
     # The value is same as the original value.
     monkeypatch.setattr('PyInstaller.config.CONF', {'pathex': []})
 
-    return AppBuilder(tmp, None, pyi_modgraph)
+    return AppBuilder(tmpdir, None)
 
 # Define a fixture which compiles the data/load_dll_using_ctypes/ctypes_dylib.c
 # program in the tmpdir, returning the tmpdir object.
@@ -559,7 +528,7 @@ def compiled_dylib(tmpdir):
         if is_win:
             tmp_data_dir = tmp_data_dir.join('ctypes_dylib.dll')
             # For Mingw-x64 we must pass '-m32' to build 32-bit binaries
-            march = '-m32' if architecture() == '32bit' else '-m64'
+            march = '-m32' if architecture == '32bit' else '-m64'
             ret = subprocess.call('gcc -shared ' + march + ' ctypes_dylib.c -o ctypes_dylib.dll', shell=True)
             if ret != 0:
                 # Find path to cl.exe file.
@@ -572,7 +541,7 @@ def compiled_dylib(tmpdir):
         elif is_darwin:
             tmp_data_dir = tmp_data_dir.join('ctypes_dylib.dylib')
             # On Mac OS X we need to detect architecture - 32 bit or 64 bit.
-            arch = 'i386' if architecture() == '32bit' else 'x86_64'
+            arch = 'i386' if architecture == '32bit' else 'x86_64'
             cmd = ('gcc -arch ' + arch + ' -Wall -dynamiclib '
                 'ctypes_dylib.c -o ctypes_dylib.dylib -headerpad_max_install_names')
             ret = subprocess.call(cmd, shell=True)

@@ -1,15 +1,19 @@
 #-----------------------------------------------------------------------------
-# Copyright (c) 2005-2018, PyInstaller Development Team.
+# Copyright (c) 2005-2020, PyInstaller Development Team.
 #
-# Distributed under the terms of the GNU General Public License with exception
-# for distributing bootloader.
+# Distributed under the terms of the GNU General Public License (version 2
+# or later) with exception for distributing the bootloader.
 #
 # The full license is in the file COPYING.txt, distributed with this software.
+#
+# SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
 #-----------------------------------------------------------------------------
 
 """
 Functional tests for PyGObject.
 """
+
+import pytest
 
 from PyInstaller.utils.tests import importorskip, parametrize
 
@@ -23,8 +27,8 @@ gi_repository_names = [x[0] for x in gi_repositories]
 
 # Names of the same packages, decorated to be skipped if unimportable.
 gi_repositories_skipped_if_unimportable = [
-    importorskip('gi.repository.' + gi_repository_name)
-    ((gi_repository_name, gi_repository_version))
+    pytest.param(gi_repository_name, gi_repository_version,
+    marks=importorskip('gi.repository.' + gi_repository_name))
     for gi_repository_name, gi_repository_version in gi_repositories
 ]
 
