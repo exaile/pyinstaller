@@ -94,7 +94,7 @@ def get_path_to_toplevel_modules(filename):
 def mtime(fnm):
     try:
         # TODO: explain why this doesn't use os.path.getmtime() ?
-        #       - It is probably not used because it returns fload and not int.
+        #       - It is probably not used because it returns float and not int.
         return os.stat(fnm)[8]
     except:
         return 0
@@ -125,6 +125,10 @@ def compile_py_files(toc, workpath):
         # Keep unrelevant items unchanged.
         if typ != 'PYMODULE':
             new_toc.append((nm, fnm, typ))
+            continue
+
+        if fnm in ('-', None):
+            # If fmn represents a namespace then skip
             continue
 
         if fnm.endswith('.py') :
